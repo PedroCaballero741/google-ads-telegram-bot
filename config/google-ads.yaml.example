@@ -1,0 +1,12 @@
+# Google Ads API Configuration
+# Copy this file to google-ads.yaml and fill in your credentials
+# Note: This file is NOT used if you set environment variables
+# Environment variables take precedence over this file
+
+developer_token: YOUR_DEVELOPER_TOKEN
+client_id: YOUR_CLIENT_ID
+client_secret: YOUR_CLIENT_SECRET
+refresh_token: YOUR_REFRESH_TOKEN
+
+# Optional: For MCC accounts
+# login_customer_id: YOUR_MCC_CUSTOMER_ID
