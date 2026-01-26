@@ -11,6 +11,7 @@ import asyncio
 import logging
 import signal
 import sys
+from telegram import BotCommand
 from telegram.ext import Application
 
 from config import settings
@@ -40,6 +41,24 @@ async def post_init(application: Application) -> None:
     """Initialize services after the bot starts."""
     logger.info("Initializing database...")
     init_db()
+
+    # Set up bot commands menu (appears when user types "/")
+    commands = [
+        BotCommand("start", "Start the bot and show main menu"),
+        BotCommand("help", "Show all available commands"),
+        BotCommand("today", "Today's spend summary"),
+        BotCommand("yesterday", "Yesterday's spend summary"),
+        BotCommand("week", "Last 7 days report"),
+        BotCommand("month", "Current month summary"),
+        BotCommand("campaign", "Search campaign by name"),
+        BotCommand("setalert", "Set daily spend alert"),
+        BotCommand("alerts", "View active alerts"),
+        BotCommand("deletealert", "Delete an alert by ID"),
+        BotCommand("sync", "Manually sync Google Ads data"),
+        BotCommand("status", "Check bot and scheduler status"),
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("Bot commands menu configured")
 
     logger.info("Setting up scheduler...")
     scheduler = setup_scheduler(application)
