@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     # Telegram Configuration
     telegram_bot_token: str = Field(..., alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(..., alias="TELEGRAM_CHAT_ID")
+    authorized_users: str = Field("", alias="AUTHORIZED_USERS")  # Comma-separated user IDs
+
+    @property
+    def authorized_user_ids(self) -> list[int]:
+        """Return list of authorized user IDs."""
+        if not self.authorized_users:
+            # If not set, allow the default chat_id
+            return [int(self.telegram_chat_id)]
+        return [int(uid.strip()) for uid in self.authorized_users.split(",") if uid.strip()]
 
     # Database Configuration
     database_url: str = Field(..., alias="DATABASE_URL")

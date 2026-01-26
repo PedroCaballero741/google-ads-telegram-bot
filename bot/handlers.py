@@ -8,6 +8,7 @@ from telegram.ext import (
     filters,
 )
 import logging
+from functools import wraps
 
 from services import ReportService, AlertService, GoogleAdsService
 from database.models import ThresholdType
@@ -16,11 +17,42 @@ from .keyboards import get_main_keyboard, get_quick_actions_keyboard, get_alerts
 
 logger = logging.getLogger(__name__)
 
+
+def authorized_only(func):
+    """Decorator to restrict commands to authorized users only."""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        if user_id not in settings.authorized_user_ids:
+            logger.warning(f"Unauthorized access attempt by user {user_id}")
+            await update.message.reply_text(
+                "⛔ You are not authorized to use this bot.\n"
+                f"Your user ID: `{user_id}`",
+                parse_mode="Markdown"
+            )
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+
+def authorized_callback_only(func):
+    """Decorator to restrict callback queries to authorized users only."""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        if user_id not in settings.authorized_user_ids:
+            logger.warning(f"Unauthorized callback attempt by user {user_id}")
+            await update.callback_query.answer("⛔ Not authorized", show_alert=True)
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
 # Initialize services
 report_service = ReportService()
 alert_service = AlertService()
 
 
+@authorized_only
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     user = update.effective_user
@@ -38,6 +70,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+@authorized_only
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command."""
     help_text = (
@@ -59,6 +92,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
+@authorized_only
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /today command."""
     await update.message.reply_chat_action("typing")
@@ -66,6 +100,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(report, parse_mode="Markdown")
 
 
+@authorized_only
 async def yesterday_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /yesterday command."""
     await update.message.reply_chat_action("typing")
@@ -73,6 +108,7 @@ async def yesterday_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(report, parse_mode="Markdown")
 
 
+@authorized_only
 async def week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /week command."""
     await update.message.reply_chat_action("typing")
@@ -80,6 +116,7 @@ async def week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(report, parse_mode="Markdown")
 
 
+@authorized_only
 async def month_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /month command."""
     await update.message.reply_chat_action("typing")
@@ -87,6 +124,7 @@ async def month_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(report, parse_mode="Markdown")
 
 
+@authorized_only
 async def campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /campaign <name> command."""
     if not context.args:
@@ -103,6 +141,7 @@ async def campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(report, parse_mode="Markdown")
 
 
+@authorized_only
 async def setalert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /setalert <amount> command."""
     if not context.args:
@@ -136,6 +175,7 @@ async def setalert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 
+@authorized_only
 async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /alerts command."""
     chat_id = str(update.effective_chat.id)
@@ -143,6 +183,7 @@ async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(message, parse_mode="Markdown")
 
 
+@authorized_only
 async def deletealert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /deletealert <id> command."""
     if not context.args:
@@ -165,6 +206,7 @@ async def deletealert_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"❌ Alert {alert_id} not found.")
 
 
+@authorized_only
 async def sync_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /sync command - manually trigger data sync."""
     await update.message.reply_text("🔄 Syncing data from Google Ads...")
@@ -179,6 +221,7 @@ async def sync_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f"❌ Sync failed: {str(e)}")
 
 
+@authorized_only
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /status command."""
     chat_id = str(update.effective_chat.id)
@@ -193,6 +236,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(status_text, parse_mode="Markdown")
 
 
+@authorized_only
 async def handle_keyboard_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle reply keyboard button presses."""
     text = update.message.text
@@ -211,6 +255,7 @@ async def handle_keyboard_buttons(update: Update, context: ContextTypes.DEFAULT_
         await help_command(update, context)
 
 
+@authorized_callback_only
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline keyboard callbacks."""
     query = update.callback_query
