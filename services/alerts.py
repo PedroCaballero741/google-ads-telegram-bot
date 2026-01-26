@@ -21,8 +21,8 @@ class AlertService:
         telegram_chat_id: str,
         threshold_type: ThresholdType = ThresholdType.DAILY_SPEND,
         campaign_id: Optional[str] = None
-    ) -> AlertThreshold:
-        """Create a new alert threshold."""
+    ) -> dict:
+        """Create a new alert threshold. Returns dict to avoid DetachedInstanceError."""
         with get_session() as session:
             alert = AlertThreshold(
                 name=name,
@@ -35,23 +35,45 @@ class AlertService:
             session.add(alert)
             session.flush()
 
-            # Get the ID before session closes
-            alert_id = alert.id
             logger.info(f"Created alert '{name}' with threshold ${threshold_value}")
 
             # Refresh to get all fields
             session.refresh(alert)
-            return alert
 
-    def get_active_alerts(self, chat_id: Optional[str] = None) -> List[AlertThreshold]:
-        """Get all active alert thresholds."""
+            # Return dict before session closes to avoid DetachedInstanceError
+            return {
+                "id": alert.id,
+                "name": alert.name,
+                "threshold_type": alert.threshold_type,
+                "threshold_value": float(alert.threshold_value),
+                "campaign_id": alert.campaign_id,
+                "telegram_chat_id": alert.telegram_chat_id,
+                "is_active": alert.is_active,
+            }
+
+    def get_active_alerts(self, chat_id: Optional[str] = None) -> List[dict]:
+        """Get all active alert thresholds as dictionaries to avoid DetachedInstanceError."""
         with get_session() as session:
             query = session.query(AlertThreshold).filter(AlertThreshold.is_active == True)
 
             if chat_id:
                 query = query.filter(AlertThreshold.telegram_chat_id == chat_id)
 
-            return query.all()
+            alerts = query.all()
+
+            # Convert to dicts before session closes to avoid DetachedInstanceError
+            return [
+                {
+                    "id": alert.id,
+                    "name": alert.name,
+                    "threshold_type": alert.threshold_type,
+                    "threshold_value": float(alert.threshold_value),
+                    "campaign_id": alert.campaign_id,
+                    "telegram_chat_id": alert.telegram_chat_id,
+                    "is_active": alert.is_active,
+                }
+                for alert in alerts
+            ]
 
     def deactivate_alert(self, alert_id: int) -> bool:
         """Deactivate an alert by ID."""
@@ -148,38 +170,38 @@ class AlertService:
 
         for alert in alerts:
             # Skip if already triggered today
-            if self._has_already_triggered(alert.id, target_date):
+            if self._has_already_triggered(alert["id"], target_date):
                 continue
 
             # Get current value based on alert type
-            if alert.threshold_type == ThresholdType.DAILY_SPEND:
+            if alert["threshold_type"] == ThresholdType.DAILY_SPEND:
                 current_value = self._get_current_daily_spend(target_date)
-            elif alert.threshold_type == ThresholdType.CAMPAIGN_SPEND:
-                if not alert.campaign_id:
+            elif alert["threshold_type"] == ThresholdType.CAMPAIGN_SPEND:
+                if not alert["campaign_id"]:
                     continue
-                current_value = self._get_campaign_spend(alert.campaign_id, target_date)
+                current_value = self._get_campaign_spend(alert["campaign_id"], target_date)
             else:
                 continue
 
             # Check if threshold exceeded
-            threshold_value = float(alert.threshold_value)
+            threshold_value = alert["threshold_value"]
             if current_value >= threshold_value:
                 # Record the trigger
-                history = self._record_alert_trigger(alert.id, target_date, current_value)
+                history = self._record_alert_trigger(alert["id"], target_date, current_value)
 
                 triggered.append({
-                    "alert_id": alert.id,
+                    "alert_id": alert["id"],
                     "history_id": history.id,
-                    "alert_name": alert.name,
-                    "threshold_type": alert.threshold_type.value,
+                    "alert_name": alert["name"],
+                    "threshold_type": alert["threshold_type"].value,
                     "threshold_value": threshold_value,
                     "actual_value": current_value,
-                    "chat_id": alert.telegram_chat_id,
-                    "campaign_id": alert.campaign_id,
+                    "chat_id": alert["telegram_chat_id"],
+                    "campaign_id": alert["campaign_id"],
                 })
 
                 logger.warning(
-                    f"Alert triggered: {alert.name} - "
+                    f"Alert triggered: {alert['name']} - "
                     f"Threshold: ${threshold_value:.2f}, Actual: ${current_value:.2f}"
                 )
 
@@ -203,12 +225,12 @@ class AlertService:
 
         message = "📋 *Active Alerts*\n\n"
         for alert in alerts:
-            status = "✅" if alert.is_active else "❌"
+            status = "✅" if alert["is_active"] else "❌"
             message += (
-                f"{status} *{alert.name}*\n"
-                f"   Threshold: ${float(alert.threshold_value):,.2f}\n"
-                f"   Type: {alert.threshold_type.value.replace('_', ' ').title()}\n"
-                f"   ID: {alert.id}\n\n"
+                f"{status} *{alert['name']}*\n"
+                f"   Threshold: ${alert['threshold_value']:,.2f}\n"
+                f"   Type: {alert['threshold_type'].value.replace('_', ' ').title()}\n"
+                f"   ID: {alert['id']}\n\n"
             )
 
         return message
